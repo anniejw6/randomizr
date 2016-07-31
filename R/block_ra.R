@@ -105,8 +105,7 @@ block_ra <- function(block_var,
   )
   
   blocks <- sort(unique(block_var))
-  assign <- rep(NA, length(block_var))
-  
+
   if (!is.null(prob)) {
     prob_each <- c(1 - prob, prob)
   }
@@ -118,48 +117,48 @@ block_ra <- function(block_var,
   N_per_block <- check_inputs$N_per_block
   
   # Case 1: block_m is specified
-  if (!is.null(block_m)) {
-    for (i in 1:length(blocks)) {
-      assign[block_var == blocks[i]] <-
-        complete_ra(N = N_per_block[i],
-                    m = block_m[i],
-                    condition_names = condition_names)
-    }
-    if (!identical(condition_names, c(0, 1))) {
-      assign <- condition_names[assign]
-    }
-    assign <- clean_condition_names(assign, condition_names)
-    return(assign)
-  }
-  
-  # Case 1.5: block_prob is specified
-  if(!is.null(block_prob)){
-    for (i in 1:length(blocks)) {
-      assign[block_var == blocks[i]] <-
-        complete_ra(N = N_per_block[i],
-                    prob = block_prob[i],
-                    condition_names = condition_names)
-    }
-    if (!identical(condition_names, c(0, 1))) {
-      assign <- condition_names[assign]
-    }
-    assign <- clean_condition_names(assign, condition_names)
-    return(assign)
-  }
-  
+  # if (!is.null(block_m)) {
+  #   for (i in 1:length(blocks)) {
+  #     assign[block_var == blocks[i]] <-
+  #       complete_ra(N = N_per_block[i],
+  #                   m = block_m[i],
+  #                   condition_names = condition_names)
+  #   }
+  #   if (!identical(condition_names, c(0, 1))) {
+  #     assign <- condition_names[assign]
+  #   }
+  #   assign <- clean_condition_names(assign, condition_names)
+  #   return(assign)
+  # }
+  # 
+  # # Case 1.5: block_prob is specified
+  # if(!is.null(block_prob)){
+  #   for (i in 1:length(blocks)) {
+  #     assign[block_var == blocks[i]] <-
+  #       complete_ra(N = N_per_block[i],
+  #                   prob = block_prob[i],
+  #                   condition_names = condition_names)
+  #   }
+  #   if (!identical(condition_names, c(0, 1))) {
+  #     assign <- condition_names[assign]
+  #   }
+  #   assign <- clean_condition_names(assign, condition_names)
+  #   return(assign)
+  # }
+  # 
   # Case 2 use or infer prob_each
   if (is.null(block_m_each) & is.null(block_prob_each)) {
     if (is.null(prob_each)) {
       prob_each <- rep(1 / num_arms, num_arms)
     }
-    
+
     if (balance_load) {
       # Get the baseline allocation
       block_m_each <- floor(table(block_var) %*% t(prob_each))
-      
+
       # Figure out the marginals
       n_unassigned <- length(block_var) - sum(block_m_each)
-      
+
       if (sum(n_unassigned) > 0) {
         fixed_column_margin <-
           as.numeric(table(complete_ra(n_unassigned, num_arms = num_arms)))
@@ -167,7 +166,7 @@ block_ra <- function(block_var,
         block_m_each <-
           update_block_m_each(block_m_each, fixed_row_margin, fixed_column_margin)
       }
-      
+
       assign <-
         block_ra(
           block_var = block_var,
@@ -176,6 +175,17 @@ block_ra <- function(block_var,
         )
       return(assign)
     } else{
+      
+      assign <- 
+        lapply(1:length(blocks), function(x){
+        complete_ra(
+          N = N_per_block[x],
+          prob_each = prob_each,
+          condition_names = condition_names
+        )
+      })
+      assign <- unlist(assign)[match(block_var, block_var[order(block_var)])]
+      
       for (i in 1:length(blocks)) {
         assign[block_var == blocks[i]] <-
           complete_ra(
@@ -194,62 +204,66 @@ block_ra <- function(block_var,
   
   # Case 3 use block_m_each
   
-  if (!is.null(block_m_each)) {
-    for (i in 1:length(blocks)) {
-      assign[block_var == blocks[i]] <-
-        complete_ra(N = N_per_block[i],
-                    m_each = block_m_each[i, ],
-                    condition_names = condition_names)
-    }
-    if (!identical(condition_names, c(0, 1))) {
-      assign <- condition_names[assign]
-    }
-    assign <- clean_condition_names(assign, condition_names)
-    return(assign)
-  }
+  # if (!is.null(block_m_each)) {
+  #   for (i in 1:length(blocks)) {
+  #     assign[block_var == blocks[i]] <-
+  #       complete_ra(N = N_per_block[i],
+  #                   m_each = block_m_each[i, ],
+  #                   condition_names = condition_names)
+  #   }
+  #   if (!identical(condition_names, c(0, 1))) {
+  #     assign <- condition_names[assign]
+  #   }
+  #   assign <- clean_condition_names(assign, condition_names)
+  #   return(assign)
+  # }
   
   # Case 4 use block_prob_each
   
-  if (!is.null(block_prob_each)) {
-    if (balance_load) {
-      # Get the baseline allocation
-      block_m_each <-
-        floor(sweep(block_prob_each, 1, table(block_var), `*`))
-      
-      # Figure out the marginals
-      n_unassigned <- length(block_var) - sum(block_m_each)
-      
-      if (sum(n_unassigned) > 0) {
-        fixed_column_margin <-
-          as.numeric(table(complete_ra(n_unassigned, num_arms = num_arms)))
-        fixed_row_margin <- table(block_var) - rowSums(block_m_each)
-        block_m_each <-
-          update_block_m_each(block_m_each, fixed_row_margin, fixed_column_margin)
-      }
-      
-      assign <-
-        block_ra(
-          block_var = block_var,
-          block_m_each = block_m_each,
-          condition_names = condition_names
-        )
-      return(assign)
-    } else{
-      for (i in 1:length(blocks)) {
-        assign[block_var == blocks[i]] <-
-          complete_ra(
-            N = N_per_block[i],
-            prob_each = block_prob_each[i, ],
-            condition_names = condition_names
-          )
-      }
-      if (!identical(condition_names, c(0, 1))) {
-        assign <- condition_names[assign]
-      }
-      assign <- clean_condition_names(assign, condition_names)
-      return(assign)
-    }
-  }
+  # if (!is.null(block_prob_each)) {
+    # if (balance_load) {
+    #   # Get the baseline allocation
+    #   block_m_each <-
+    #     floor(sweep(block_prob_each, 1, table(block_var), `*`))
+    # 
+    #   # Figure out the marginals
+    #   n_unassigned <- length(block_var) - sum(block_m_each)
+    # 
+    #   if (sum(n_unassigned) > 0) {
+    #     fixed_column_margin <-
+    #       as.numeric(table(complete_ra(n_unassigned, num_arms = num_arms)))
+    #     fixed_row_margin <- table(block_var) - rowSums(block_m_each)
+    #     block_m_each <-
+    #       update_block_m_each(block_m_each, fixed_row_margin, fixed_column_margin)
+    #   }
+
+      # assign <-
+      #   block_ra(
+      #     block_var = block_var,
+      #     block_m_each = block_m_each,
+      #     condition_names = condition_names
+      #   )
+      # return(assign)
+    # } else{
+  #     
+  #     assign <- sapply(blocks, function(x){
+  #       complete_ra(
+  #         N = N_per_block[i],
+  #         prob_each = block_prob_each[i, ],
+  #         condition_names = condition_names
+  #       )
+  #     })
+  #         
+  #     }
+  #     if (!identical(condition_names, c(0, 1))) {
+  #       assign <- condition_names[assign]
+  #     }
+  #     assign <- clean_condition_names(assign, condition_names)
+  #     return(assign)
+  #   }
+  # }
+  
+  
 }
 
 
